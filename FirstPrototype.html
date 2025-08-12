@@ -61,7 +61,10 @@
     }
     const name = birdCandidates[i];
     const img = new Image();
-    img.onload = () => { window.birdImage = img; };
+    img.onload = () => { 
+      window.birdImage = img; 
+      console.log('Bird image loaded:', img.naturalWidth, 'x', img.naturalHeight);
+    };
     img.onerror = () => setTimeout(() => tryNextBird(i + 1), 10);
     img.src = name;
   }
@@ -74,11 +77,60 @@
     h: 60,
     x: Math.floor(window.innerWidth * 0.25),
     y: Math.floor(window.innerHeight * 0.5),
-    frameCount: 4, // CHANGE to match your sprite sheet
+    frameCount: 0, // Will be calculated dynamically
     currentFrame: 0,
     frameTimer: performance.now(),
-    frameInterval: 100 // ms per frame
+    frameInterval: 150, // ms per frame - slightly slower for better visibility
+    frameWidth: 0, // Will be calculated dynamically
+    frameHeight: 0 // Will be calculated dynamically
   };
+
+  // Calculate bird sprite properties when image loads
+  function calculateBirdFrames() {
+    if (!window.birdImage || !window.birdImage.complete) return;
+    
+    const img = window.birdImage;
+    const imgWidth = img.naturalWidth;
+    const imgHeight = img.naturalHeight;
+    
+    // Try to detect sprite sheet layout
+    // Common layouts: vertical (frames stacked), horizontal (frames side by side), or grid
+    
+    // First, try vertical layout (most common for flappy bird)
+    if (imgHeight > imgWidth) {
+      // Vertical sprite sheet - frames stacked vertically
+      bird.frameCount = Math.floor(imgHeight / imgWidth);
+      bird.frameWidth = imgWidth;
+      bird.frameHeight = imgWidth; // Square frames
+    } else if (imgWidth > imgHeight) {
+      // Horizontal sprite sheet - frames side by side
+      bird.frameCount = Math.floor(imgWidth / imgHeight);
+      bird.frameWidth = imgHeight; // Square frames
+      bird.frameHeight = imgHeight;
+    } else {
+      // Square image - assume single frame or 2x2 grid
+      if (imgWidth >= 64) { // Large enough to be a grid
+        bird.frameCount = 4; // Assume 2x2 grid
+        bird.frameWidth = imgWidth / 2;
+        bird.frameHeight = imgHeight / 2;
+      } else {
+        bird.frameCount = 1; // Single frame
+        bird.frameWidth = imgWidth;
+        bird.frameHeight = imgHeight;
+      }
+    }
+    
+    // Ensure we have at least 1 frame
+    bird.frameCount = Math.max(1, bird.frameCount);
+    
+    console.log('Bird sprite analysis:', {
+      frameCount: bird.frameCount,
+      frameWidth: bird.frameWidth,
+      frameHeight: bird.frameHeight,
+      totalWidth: imgWidth,
+      totalHeight: imgHeight
+    });
+  }
 
   // Draw background
   function drawBackground() {
@@ -98,17 +150,63 @@
     if (state.bgX <= -tileW) state.bgX += tileW;
   }
 
-  // Draw bird
+  // Draw bird with improved sprite handling
   function drawBird() {
-    if (window.birdImage && window.birdImage.complete && window.birdImage.naturalWidth > 0) {
-      const frameHeight = window.birdImage.naturalHeight / bird.frameCount;
-      ctx.drawImage(
-        window.birdImage,
-        0, bird.currentFrame * frameHeight,
-        window.birdImage.naturalWidth, frameHeight,
-        bird.x, bird.y, bird.w, bird.h
-      );
+    if (!window.birdImage || !window.birdImage.complete || window.birdImage.naturalWidth === 0) {
+      return;
     }
+    
+    // Calculate frames if not done yet
+    if (bird.frameCount === 0) {
+      calculateBirdFrames();
+      return;
+    }
+    
+    const img = window.birdImage;
+    
+    // Calculate source coordinates based on sprite sheet layout
+    let srcX, srcY;
+    
+    if (img.naturalHeight > img.naturalWidth) {
+      // Vertical sprite sheet
+      srcX = 0;
+      srcY = bird.currentFrame * bird.frameHeight;
+    } else if (img.naturalWidth > img.naturalHeight) {
+      // Horizontal sprite sheet
+      srcX = bird.currentFrame * bird.frameWidth;
+      srcY = 0;
+    } else {
+      // Grid layout (2x2)
+      const framesPerRow = 2;
+      const row = Math.floor(bird.currentFrame / framesPerRow);
+      const col = bird.currentFrame % framesPerRow;
+      srcX = col * bird.frameWidth;
+      srcY = row * bird.frameHeight;
+    }
+    
+    // Calculate destination size maintaining aspect ratio
+    const aspectRatio = bird.frameWidth / bird.frameHeight;
+    let destWidth = bird.w;
+    let destHeight = bird.h;
+    
+    if (destWidth / destHeight > aspectRatio) {
+      // Destination is wider than source aspect ratio
+      destWidth = destHeight * aspectRatio;
+    } else {
+      // Destination is taller than source aspect ratio
+      destHeight = destWidth / aspectRatio;
+    }
+    
+    // Center the bird
+    const destX = bird.x + (bird.w - destWidth) / 2;
+    const destY = bird.y + (bird.h - destHeight) / 2;
+    
+    // Draw the bird frame
+    ctx.drawImage(
+      img,
+      srcX, srcY, bird.frameWidth, bird.frameHeight,
+      destX, destY, destWidth, destHeight
+    );
   }
 
   // Main loop
