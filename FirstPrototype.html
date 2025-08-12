@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Flappy Slot</title>
+<style>
+  html,body { height:100%; margin:0; background:#111; }
+  canvas { display:block; width:100vw; height:100vh; image-rendering: pixelated; }
+  #spinBtn {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 20px;
+    padding: 10px 20px;
+    background: gold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<button id="spinBtn">SPIN</button>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  let DPR = Math.max(1, window.devicePixelRatio || 1);
+
+  function resizeCanvas() {
+    const cssW = window.innerWidth;
+    const cssH = window.innerHeight;
+    canvas.style.width = cssW + 'px';
+    canvas.style.height = cssH + 'px';
+    canvas.width = Math.floor(cssW * DPR);
+    canvas.height = Math.floor(cssH * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resizeCanvas, { passive: true });
+  resizeCanvas();
+
+  // Background
+  const bg = new Image();
+  bg.src = 'test.png';
+
+  // Bird auto-finder
+  const birdCandidates = [
+    'spritebird.png','spritebird.PNG','spritebird.jpg','spritebird.jpeg','spritebird.gif',
+    'spriteBird.png','SpriteBird.png','bird.png','bird.jpg','bird.PNG',
+    './spritebird.png','./spritebird.PNG'
+  ];
+  window.birdImage = null;
+  function tryNextBird(i = 0) {
+    if (i >= birdCandidates.length) {
+      console.error('No bird image found');
+      return;
+    }
+    const name = birdCandidates[i];
+    const img = new Image();
+    img.onload = () => { window.birdImage = img; };
+    img.onerror = () => setTimeout(() => tryNextBird(i + 1), 10);
+    img.src = name;
+  }
+  tryNextBird(0);
+
+  // Game state
+  const state = { bgX: 0, bgSpeed: 0 };
+  const bird = {
+    w: 80,
+    h: 60,
+    x: Math.floor(window.innerWidth * 0.25),
+    y: Math.floor(window.innerHeight * 0.5),
+    frameCount: 4, // CHANGE to match your sprite sheet
+    currentFrame: 0,
+    frameTimer: performance.now(),
+    frameInterval: 100 // ms per frame
+  };
+
+  // Draw background
+  function drawBackground() {
+    if (!bg.complete || bg.naturalWidth === 0) {
+      ctx.fillStyle = '#87ceeb';
+      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+      return;
+    }
+    const scale = window.innerHeight / bg.naturalHeight;
+    const tileW = Math.ceil(bg.naturalWidth * scale);
+    const startX = state.bgX - tileW;
+    const needed = Math.ceil(window.innerWidth / tileW) + 3;
+    for (let i = 0; i < needed; i++) {
+      ctx.drawImage(bg, startX + i * tileW, 0, tileW, window.innerHeight);
+    }
+    state.bgX -= state.bgSpeed;
+    if (state.bgX <= -tileW) state.bgX += tileW;
+  }
+
+  // Draw bird
+  function drawBird() {
+    if (window.birdImage && window.birdImage.complete && window.birdImage.naturalWidth > 0) {
+      const frameHeight = window.birdImage.naturalHeight / bird.frameCount;
+      ctx.drawImage(
+        window.birdImage,
+        0, bird.currentFrame * frameHeight,
+        window.birdImage.naturalWidth, frameHeight,
+        bird.x, bird.y, bird.w, bird.h
+      );
+    }
+  }
+
+  // Main loop
+  function loop(now) {
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    drawBackground();
+    drawBird();
+
+    // Frame update for bird
+    if (now - bird.frameTimer > bird.frameInterval) {
+      bird.currentFrame = (bird.currentFrame + 1) % bird.frameCount;
+      bird.frameTimer = now;
+    }
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // Spin button behavior
+  const spinBtn = document.getElementById('spinBtn');
+  spinBtn.addEventListener('click', () => {
+    state.bgSpeed = 2;
+    setTimeout(() => state.bgSpeed = 0, 3000);
+  });
+})();
+</script>
+</body>
+</html>
